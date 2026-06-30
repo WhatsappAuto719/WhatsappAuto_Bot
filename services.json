@@ -1,0 +1,44 @@
+{
+  "businessInfo": {
+    "contactNumber": "03076926854",
+    "businessName": "Auto Posting & News Website Services"
+  },
+  "services": [
+    {
+      "id": 1,
+      "name": "نیوز ویب سائیٹ + آٹو پوسٹنگ سسٹم - BASIC پیکج",
+      "details": "Telegram Channel آٹو پوسٹنگ\nFacebook Page آٹو پوسٹنگ\n1 چینل + 1 پیج\nروزانہ آٹومیشن\n24/7 بوٹ رننگ",
+      "setupFee": "Rs. 5,000 (ایک بار)",
+      "monthlyFee": "Rs. 2,000/ماہ"
+    },
+    {
+      "id": 2,
+      "name": "نیوز ویب سائیٹ + آٹو پوسٹنگ سسٹم - STANDARD پیکج (سب سے مقبول)",
+      "details": "Telegram + Facebook + WhatsApp\nMulti-Channel Support (2-3 Pages)\nآٹو نیوز اسکریپنگ\nScheduling + آٹو پوسٹنگ\nAnalytics Dashboard\nویب سائیٹ آٹو پوسٹنگ\nPriority Support",
+      "setupFee": "Rs. 10,000 (ایک بار)",
+      "monthlyFee": "Rs. 4,000/ماہ"
+    },
+    {
+      "id": 3,
+      "name": "نیوز ویب سائیٹ + آٹو پوسٹنگ سسٹم - PRO پیکج",
+      "details": "Multi-Platform Automation\nUnlimited Channels & Pages\nWhatsApp Cloud API Integration\nWebsite Auto Posting (Advanced)\nAI Content Rewriting\nAdvanced Analytics & Reports\nPremium Support",
+      "setupFee": "Rs. 20,000 (ایک بار)",
+      "monthlyFee": "Rs. 8,000/ماہ"
+    },
+    {
+      "id": 4,
+      "name": "نیوز ویب سائیٹ بنانا",
+      "details": "مکمل نیوز پورٹل (WordPress/Custom)\nAI آٹو پوسٹنگ\nتمام پلیٹ فارمز سے منسلک (Facebook, Telegram, Twitter, YouTube, Website)\nآپ کے برانڈ کے مطابق ڈیزائن",
+      "setupFee": "Standard یا Pro پیکج میں شامل",
+      "monthlyFee": "-"
+    },
+    {
+      "id": 5,
+      "name": "Telegram بوٹ",
+      "details": "آٹو پوسٹنگ بوٹ\nنیوز چینل مینجمنٹ",
+      "setupFee": "پیکج میں شامل",
+      "monthlyFee": "-"
+    }
+  ],
+  "nextId": 6
+}
