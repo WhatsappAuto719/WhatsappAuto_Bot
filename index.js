@@ -4,219 +4,177 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+const qrcode = require('qrcode');
 
 // ============================================================
-// آپ کا Gemini AI کلائنٹ
+// Gemini AI
 // ============================================================
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-// ============================================================
-// ایڈمن نمبر — صرف یہ نمبر سروسز تبدیل کرسکتا ہے
-// ============================================================
-const ADMIN_NUMBER = '923076926854'; // 03076926854 کا انٹرنیشنل فارمیٹ (92 کے ساتھ، بغیر + یا 0)
-
+const ADMIN_NUMBER = '923076926854';
 const SERVICES_FILE = path.join(__dirname, 'services.json');
 
+// QR کوڈ محفوظ کریں
+let currentQR = null;
+
 // ============================================================
-// سروسز فائل پڑھیں/لکھیں
+// ویب سرور — QR کوڈ دکھانے کے لیے
+// ============================================================
+const PORT = process.env.PORT || 3000;
+const server = http.createServer(async (req, res) => {
+  if (req.url === '/qr' || req.url === '/') {
+    if (!currentQR) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`
+        <html><body style="background:#000;color:#fff;font-family:sans-serif;text-align:center;padding:50px">
+        <h2>✅ WhatsApp بوٹ پہلے سے کنیکٹ ہے!</h2>
+        <p>یا QR کوڈ ابھی لوڈ ہو رہا ہے — 10 سیکنڈ بعد Refresh کریں</p>
+        <script>setTimeout(()=>location.reload(),10000)</script>
+        </body></html>
+      `);
+    } else {
+      try {
+        const qrImage = await qrcode.toDataURL(currentQR);
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`
+          <html><body style="background:#000;color:#fff;font-family:sans-serif;text-align:center;padding:30px">
+          <h2>📱 WhatsApp QR کوڈ سکین کریں</h2>
+          <img src="${qrImage}" style="width:300px;height:300px;border:10px solid white;border-radius:10px"/>
+          <p>WhatsApp ➡ Linked Devices ➡ Link a Device</p>
+          <p style="color:yellow">⚠️ یہ کوڈ 60 سیکنڈ میں بدل جاتا ہے — جلدی سکین کریں!</p>
+          <script>setTimeout(()=>location.reload(),30000)</script>
+          </body></html>
+        `);
+      } catch (e) {
+        res.writeHead(500);
+        res.end('QR Error: ' + e.message);
+      }
+    }
+  } else {
+    res.writeHead(200);
+    res.end('WhatsApp Bot Running ✅');
+  }
+});
+server.listen(PORT, () => console.log(`🌐 ویب سرور چل رہا ہے: Port ${PORT}`));
+
+// ============================================================
+// سروسز فائل
 // ============================================================
 function loadServices() {
   try {
-    const raw = fs.readFileSync(SERVICES_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error('سروسز فائل پڑھنے میں مسئلہ:', err);
+    return JSON.parse(fs.readFileSync(SERVICES_FILE, 'utf-8'));
+  } catch {
     return { businessInfo: { contactNumber: '03076926854', businessName: 'Services' }, services: [], nextId: 1 };
   }
 }
-
 function saveServices(data) {
   fs.writeFileSync(SERVICES_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
-// ============================================================
-// سروسز کو AI کے لیے ٹیکسٹ میں تبدیل کریں
-// ============================================================
 function buildServicesPrompt() {
   const data = loadServices();
-  let text = `آپ ایک فری لانسر کا WhatsApp سیلز بوٹ ہیں۔ آپ کا کام کسٹمرز کو درج ذیل سروسز کے بارے میں مکمل معلومات دینا ہے۔\n\n=== سروسز اور پیکجز ===\n\n`;
-
+  let text = `آپ ایک فری لانسر کا WhatsApp سیلز بوٹ ہیں۔ کسٹمرز کو سروسز کے بارے میں مکمل معلومات دیں۔\n\n=== سروسز ===\n\n`;
   for (const s of data.services) {
-    text += `${s.id}. ${s.name}:\n${s.details}\nسیٹ اپ فیس: ${s.setupFee}\nماہانہ: ${s.monthlyFee}\n\n`;
+    text += `${s.id}. ${s.name}:\n${s.details}\nسیٹ اپ: ${s.setupFee} | ماہانہ: ${s.monthlyFee}\n\n`;
   }
-
-  text += `رابطہ: ${data.businessInfo.contactNumber}\n\n`;
-  text += `=== اہم ہدایات ===\n`;
-  text += `- اردو میں بات کریں\n`;
-  text += `- دوستانہ اور پیشہ ورانہ لہجہ رکھیں\n`;
-  text += `- سوال کے مطابق مناسب پیکج تجویز کریں\n`;
-  text += `- آخر میں ہمیشہ رابطہ نمبر دیں: ${data.businessInfo.contactNumber}\n`;
-  text += `- اگر کوئی قیمت کم کروانا چاہے تو بتائیں کہ پیکجز پہلے سے بہت مناسب ہیں\n`;
-  text += `- زیادہ لمبا جواب نہ دیں، مختصر اور واضح رہیں\n`;
-
+  text += `رابطہ: ${data.businessInfo.contactNumber}\n`;
+  text += `ہدایات: اردو میں، مختصر، دوستانہ، آخر میں نمبر دیں: ${data.businessInfo.contactNumber}`;
   return text;
 }
 
-// ============================================================
-// بوٹ کا عام (کسٹمر) جواب جنریٹ کریں
-// ============================================================
-async function generateReply(userMessage, conversationHistory) {
+async function generateReply(userMessage, history) {
   try {
-    const SERVICES_DATA = buildServicesPrompt();
-
-    let historyText = '';
-    for (const msg of conversationHistory) {
-      const role = msg.role === 'user' ? 'کسٹمر' : 'بوٹ';
-      historyText += `${role}: ${msg.content}\n`;
-    }
-
-    const fullPrompt = `${SERVICES_DATA}\n\n=== گفتگو کی تاریخ ===\n${historyText}\n\nکسٹمر کا نیا پیغام: ${userMessage}\n\nبوٹ کا جواب (صرف اردو میں، مختصر اور واضح):`;
-
-    const result = await model.generateContent(fullPrompt);
+    let historyText = history.map(m => `${m.role === 'user' ? 'کسٹمر' : 'بوٹ'}: ${m.content}`).join('\n');
+    const prompt = `${buildServicesPrompt()}\n\nگفتگو:\n${historyText}\n\nکسٹمر: ${userMessage}\nبوٹ:`;
+    const result = await model.generateContent(prompt);
     return result.response.text();
-  } catch (error) {
-    console.error('AI Error:', error);
-    const data = loadServices();
-    return `معذرت، ابھی جواب نہیں دے سکتا۔ براہ کرم ${data.businessInfo.contactNumber} پر کال کریں۔`;
+  } catch (e) {
+    return `معذرت، مسئلہ ہوا۔ براہ کرم ${loadServices().businessInfo.contactNumber} پر کال کریں۔`;
   }
 }
 
 // ============================================================
-// ایڈمن کمانڈز ہینڈل کریں
+// ایڈمن کمانڈز
 // ============================================================
-function isAdminCommand(text) {
-  return text.trim().startsWith('/');
+function parseFields(lines) {
+  const f = {};
+  for (const l of lines) {
+    const i = l.indexOf(':');
+    if (i !== -1) f[l.substring(0, i).trim()] = l.substring(i + 1).trim();
+  }
+  return f;
 }
 
 function handleAdminCommand(text) {
   const data = loadServices();
-  const trimmed = text.trim();
+  const t = text.trim();
 
-  // /list — تمام سروسز دکھائیں
-  if (trimmed === '/list') {
-    if (data.services.length === 0) return '📋 ابھی کوئی سروس موجود نہیں۔';
-    let out = '📋 *موجودہ سروسز:*\n\n';
-    for (const s of data.services) {
-      out += `*${s.id}.* ${s.name}\n💰 سیٹ اپ: ${s.setupFee} | ماہانہ: ${s.monthlyFee}\n\n`;
-    }
-    return out;
+  if (t === '/list') {
+    if (!data.services.length) return '📋 کوئی سروس نہیں';
+    return '📋 *سروسز:*\n\n' + data.services.map(s => `*${s.id}.* ${s.name}\n💰 ${s.setupFee} | ${s.monthlyFee}`).join('\n\n');
   }
 
-  // /help — کمانڈز کی فہرست
-  if (trimmed === '/help' || trimmed === '/menu') {
-    return `🤖 *ایڈمن کمانڈز*\n\n` +
-      `📋 /list — تمام سروسز دیکھیں\n\n` +
-      `➕ نئی سروس ایڈ کرنے کے لیے یہ فارمیٹ بھیجیں:\n` +
-      `/addservice\nنام: [سروس کا نام]\nتفصیل: [تفصیل]\nسیٹ اپ: [قیمت]\nماہانہ: [قیمت]\n\n` +
-      `❌ /delete [نمبر] — سروس ہٹائیں (مثلاً /delete 3)\n\n` +
-      `✏️ سروس ایڈٹ کرنے کے لیے یہ فارمیٹ بھیجیں:\n` +
-      `/editservice [نمبر]\nنام: [نیا نام]\nتفصیل: [نئی تفصیل]\nسیٹ اپ: [نئی قیمت]\nماہانہ: [نئی قیمت]\n\n` +
-      `📞 /setcontact [نمبر] — رابطہ نمبر بدلیں`;
+  if (t === '/help') {
+    return `🤖 *ایڈمن کمانڈز*\n\n/list — سروسز دیکھیں\n/addservice — نئی سروس\n/editservice [نمبر] — ترمیم\n/delete [نمبر] — ہٹائیں\n/setcontact [نمبر] — نمبر بدلیں`;
   }
 
-  // /addservice — نئی سروس شامل کریں
-  if (trimmed.startsWith('/addservice')) {
-    const lines = trimmed.split('\n').slice(1);
-    const fields = parseFields(lines);
-
-    if (!fields['نام']) {
-      return '⚠️ غلط فارمیٹ۔ یہ طریقہ استعمال کریں:\n\n/addservice\nنام: سروس کا نام\nتفصیل: تفصیل یہاں\nسیٹ اپ: Rs.5000\nماہانہ: Rs.1000';
-    }
-
-    const newService = {
-      id: data.nextId,
-      name: fields['نام'] || '',
-      details: fields['تفصیل'] || '',
-      setupFee: fields['سیٹ اپ'] || 'رابطہ کریں',
-      monthlyFee: fields['ماہانہ'] || '-',
-    };
-
-    data.services.push(newService);
-    data.nextId += 1;
+  if (t.startsWith('/addservice')) {
+    const f = parseFields(t.split('\n').slice(1));
+    if (!f['نام']) return '⚠️ فارمیٹ:\n/addservice\nنام: ...\nتفصیل: ...\nسیٹ اپ: ...\nماہانہ: ...';
+    const s = { id: data.nextId, name: f['نام'], details: f['تفصیل'] || '', setupFee: f['سیٹ اپ'] || '-', monthlyFee: f['ماہانہ'] || '-' };
+    data.services.push(s);
+    data.nextId++;
     saveServices(data);
-
-    return `✅ نئی سروس شامل ہوگئی!\n\n*${newService.id}. ${newService.name}*\n${newService.details}\n💰 ${newService.setupFee} | ${newService.monthlyFee}`;
+    return `✅ سروس شامل: *${s.name}*`;
   }
 
-  // /editservice [id] — موجودہ سروس میں ترمیم کریں
-  if (trimmed.startsWith('/editservice')) {
-    const firstLine = trimmed.split('\n')[0];
-    const idMatch = firstLine.match(/\/editservice\s+(\d+)/);
-    if (!idMatch) {
-      return '⚠️ غلط فارمیٹ۔ مثال:\n\n/editservice 2\nنام: نیا نام\nتفصیل: نئی تفصیل\nسیٹ اپ: Rs.5000\nماہانہ: Rs.1000';
-    }
-
-    const id = parseInt(idMatch[1]);
-    const service = data.services.find(s => s.id === id);
-    if (!service) return `⚠️ سروس نمبر ${id} نہیں ملی۔ /list سے چیک کریں۔`;
-
-    const lines = trimmed.split('\n').slice(1);
-    const fields = parseFields(lines);
-
-    if (fields['نام']) service.name = fields['نام'];
-    if (fields['تفصیل']) service.details = fields['تفصیل'];
-    if (fields['سیٹ اپ']) service.setupFee = fields['سیٹ اپ'];
-    if (fields['ماہانہ']) service.monthlyFee = fields['ماہانہ'];
-
+  if (t.startsWith('/editservice')) {
+    const id = parseInt((t.split('\n')[0].match(/\d+/) || [])[0]);
+    const s = data.services.find(x => x.id === id);
+    if (!s) return `⚠️ سروس ${id} نہیں ملی`;
+    const f = parseFields(t.split('\n').slice(1));
+    if (f['نام']) s.name = f['نام'];
+    if (f['تفصیل']) s.details = f['تفصیل'];
+    if (f['سیٹ اپ']) s.setupFee = f['سیٹ اپ'];
+    if (f['ماہانہ']) s.monthlyFee = f['ماہانہ'];
     saveServices(data);
-    return `✅ سروس نمبر ${id} اپڈیٹ ہوگئی!\n\n*${service.name}*\n${service.details}\n💰 ${service.setupFee} | ${service.monthlyFee}`;
+    return `✅ سروس ${id} اپڈیٹ ہوگئی`;
   }
 
-  // /delete [id] — سروس ہٹائیں
-  if (trimmed.startsWith('/delete')) {
-    const idMatch = trimmed.match(/\/delete\s+(\d+)/);
-    if (!idMatch) return '⚠️ غلط فارمیٹ۔ مثال: /delete 3';
-
-    const id = parseInt(idMatch[1]);
-    const index = data.services.findIndex(s => s.id === id);
-    if (index === -1) return `⚠️ سروس نمبر ${id} نہیں ملی۔`;
-
-    const removed = data.services.splice(index, 1)[0];
+  if (t.startsWith('/delete')) {
+    const id = parseInt((t.match(/\d+/) || [])[0]);
+    const i = data.services.findIndex(x => x.id === id);
+    if (i === -1) return `⚠️ سروس ${id} نہیں ملی`;
+    const name = data.services.splice(i, 1)[0].name;
     saveServices(data);
-    return `🗑️ سروس ہٹا دی گئی: "${removed.name}"`;
+    return `🗑️ ہٹا دی: "${name}"`;
   }
 
-  // /setcontact — رابطہ نمبر بدلیں
-  if (trimmed.startsWith('/setcontact')) {
-    const numMatch = trimmed.match(/\/setcontact\s+(\S+)/);
-    if (!numMatch) return '⚠️ غلط فارمیٹ۔ مثال: /setcontact 03001234567';
-
-    data.businessInfo.contactNumber = numMatch[1];
+  if (t.startsWith('/setcontact')) {
+    const num = (t.match(/\/setcontact\s+(\S+)/) || [])[1];
+    if (!num) return '⚠️ مثال: /setcontact 03001234567';
+    data.businessInfo.contactNumber = num;
     saveServices(data);
-    return `✅ رابطہ نمبر اپڈیٹ ہوگیا: ${numMatch[1]}`;
+    return `✅ نمبر اپڈیٹ: ${num}`;
   }
 
-  return '⚠️ نامعلوم کمانڈ۔ /help لکھیں مدد کے لیے۔';
-}
-
-// مدد کرنے والا فنکشن: "نام: کچھ" والی لائنوں کو آبجیکٹ میں بدلیں
-function parseFields(lines) {
-  const fields = {};
-  for (const line of lines) {
-    const idx = line.indexOf(':');
-    if (idx === -1) continue;
-    const key = line.substring(0, idx).trim();
-    const value = line.substring(idx + 1).trim();
-    fields[key] = value;
-  }
-  return fields;
+  return '⚠️ نامعلوم کمانڈ۔ /help لکھیں';
 }
 
 // ============================================================
-// گفتگو کی تاریخ (میموری)
+// گفتگو کی تاریخ
 // ============================================================
 const conversations = new Map();
-
 function getHistory(jid) {
   if (!conversations.has(jid)) conversations.set(jid, []);
   return conversations.get(jid);
 }
-
 function addToHistory(jid, role, content) {
-  const history = getHistory(jid);
-  history.push({ role, content });
-  if (history.length > 10) history.splice(0, 2);
+  const h = getHistory(jid);
+  h.push({ role, content });
+  if (h.length > 10) h.splice(0, 2);
 }
 
 // ============================================================
@@ -224,7 +182,6 @@ function addToHistory(jid, role, content) {
 // ============================================================
 async function connectWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
-  const qrcode = require('qrcode-terminal');
 
   const sock = makeWASocket({
     logger: pino({ level: 'silent' }),
@@ -238,92 +195,50 @@ async function connectWhatsApp() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log('\n==============================================');
-      console.log('📱 QR کوڈ سکین کریں WhatsApp سے!');
-      console.log('WhatsApp > Linked Devices > Link a Device');
-      console.log('==============================================\n');
-      qrcode.generate(qr, { small: true });
-      console.log('\n==============================================\n');
+      currentQR = qr;
+      console.log('📱 QR کوڈ تیار ہے — /qr صفحہ کھولیں');
     }
 
     if (connection === 'close') {
-      const shouldReconnect =
-        (lastDisconnect?.error instanceof Boom)
-          ? lastDisconnect.error.output?.statusCode !== DisconnectReason.loggedOut
-          : true;
-      console.log('کنیکشن بند ہوگیا، دوبارہ کوشش:', shouldReconnect);
-      if (shouldReconnect) connectWhatsApp();
+      currentQR = null;
+      const retry = (lastDisconnect?.error instanceof Boom)
+        ? lastDisconnect.error.output?.statusCode !== DisconnectReason.loggedOut
+        : true;
+      if (retry) connectWhatsApp();
     } else if (connection === 'open') {
-      const data = loadServices();
-      console.log('✅ WhatsApp بوٹ چل رہا ہے!');
-      console.log(`📞 نمبر: ${data.businessInfo.contactNumber}`);
-      console.log('🤖 AI جوابات فعال ہیں');
-      console.log(`👑 ایڈمن نمبر: ${ADMIN_NUMBER}`);
+      currentQR = null;
+      console.log('✅ WhatsApp بوٹ کنیکٹ ہوگیا!');
     }
   });
 
-  // ============================================================
-  // آنے والے میسجز پر کارروائی
-  // ============================================================
   sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
     if (type !== 'notify') return;
-
     for (const msg of msgs) {
       if (msg.key.fromMe) continue;
-
       const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
       if (!text) continue;
-
       const from = msg.key.remoteJid;
-      const senderNumber = from.split('@')[0];
-      console.log(`\n📩 میسج آیا (${senderNumber}): ${text}`);
+      const sender = from.split('@')[0];
 
       await sock.sendPresenceUpdate('composing', from);
-
       try {
         let reply;
-
-        // ============================================
-        // ایڈمن کمانڈ چیک کریں
-        // ============================================
-        if (isAdminCommand(text)) {
-          if (senderNumber === ADMIN_NUMBER) {
-            reply = handleAdminCommand(text);
-          } else {
-            reply = null; // ایڈمن کے علاوہ کوئی کمانڈ نہیں چلا سکتا
-          }
-        } else {
-          // ============================================
-          // عام کسٹمر میسج — AI جواب دے
-          // ============================================
+        if (text.trim().startsWith('/') && sender === ADMIN_NUMBER) {
+          reply = handleAdminCommand(text);
+        } else if (!text.trim().startsWith('/')) {
           const history = getHistory(from);
           reply = await generateReply(text, history);
           addToHistory(from, 'user', text);
           addToHistory(from, 'assistant', reply);
         }
-
-        if (reply) {
-          await sock.sendMessage(from, { text: reply });
-          console.log(`✅ جواب بھیجا: ${reply.substring(0, 50)}...`);
-        }
-
-      } catch (err) {
-        console.error('میسج ایرر:', err);
-        const data = loadServices();
-        await sock.sendMessage(from, {
-          text: `معذرت، کچھ مسئلہ ہوا۔ براہ کرم ${data.businessInfo.contactNumber} پر رابطہ کریں۔`
-        });
+        if (reply) await sock.sendMessage(from, { text: reply });
+      } catch (e) {
+        console.error('Error:', e);
       }
-
       await sock.sendPresenceUpdate('paused', from);
     }
   });
-
-  return sock;
 }
 
-// ============================================================
-// بوٹ شروع کریں
-// ============================================================
-console.log('🚀 WhatsApp بوٹ شروع ہو رہا ہے...');
+console.log('🚀 بوٹ شروع ہو رہا ہے...');
 connectWhatsApp().catch(console.error);
