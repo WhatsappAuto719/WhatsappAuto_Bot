@@ -4,10 +4,6 @@
   "main": "index.js",
   "scripts": { "start": "node index.js" },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.9",
-    "@hapi/boom": "^10.0.1",
-    "@google/generative-ai": "^0.21.0",
-    "pino": "^9.3.2",
-    "qrcode": "^1.5.4"
+    "@google/generative-ai": "^0.21.0"
   }
 }
