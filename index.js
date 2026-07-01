@@ -242,3 +242,11 @@ async function connectWhatsApp() {
 
 console.log('🚀 بوٹ شروع ہو رہا ہے...');
 connectWhatsApp().catch(console.error);
+
+// Railway کو stable رکھنے کے لیے
+process.on('SIGTERM', () => {
+  console.log('SIGTERM موصول، بوٹ بند نہیں ہوگا...');
+});
+process.on('SIGINT', () => {
+  console.log('SIGINT موصول');
+});
